@@ -1,6 +1,7 @@
 import assert from "assert"
-import {error, print} from "./console.mjs"
+import {print} from "./console.mjs"
 import {getBlocks, getLagerHash, getLatestHeight, getStakingLager} from "./graphql.mjs"
+import {Table} from "console-table-printer"
 
 const exit = (message, code = 0) => {
     print(message)
@@ -13,7 +14,6 @@ const minHeight = 0
 const confirmations = 15
 const fee = 0.10 // 0.05 = 5%
 const coinbaseDefault = 720000000000
-const coinbaseSuperchargeDefault = 1440000000000
 const foundationDelegations = []
 let ledgerHash, latestBlock, latestBlockHeightValue, maxHeight
 
@@ -113,6 +113,7 @@ if (!blocks.data.blocks || blocks.data.blocks.length === 0) {
     exit(`Nothing to payout as we didn't win anything`)
 }
 
+let blockIndex = 1
 for (let block of blocks.data.blocks) {
 
     // ???
@@ -157,10 +158,17 @@ for (let block of blocks.data.blocks) {
 
     assert(totalRewards === totalRewardsPrevMethod, `Total rewards for two methods must be equals! Prev: ${totalRewardsPrevMethod}, Total: ${totalRewards}`)
 
-    blocksTable.push([
-        block.blockHeight, superchargedWeighting, coinbase,
-        totalFeeTransfersToCreator, feeTransfersToSnarkers, totalFeeTransfersByCoinbase
-    ])
+    blocksTable.push({
+        index: blockIndex,
+        block: block.blockHeight,
+        superchargedWeighting,
+        coinbase,
+        totalFeeTransfersToCreator,
+        feeTransfersToSnarkers,
+        totalFeeTransfersByCoinbase
+    })
+
+    blockIndex++
 
     let totalFees = fee * totalRewards
 
@@ -248,7 +256,20 @@ for (let block of blocks.data.blocks) {
 
 print(`We won these ${blocksTable.length} blocks:`)
 
-console.table(blocksTable)
+const _tableBlocks = new Table({
+    columns: [
+        {name: "index", title: "ID", alignment: 'center'},
+        {name: "block", title: "Block"},
+        {name: "superchargedWeighting", title: "Super Charge Weight", alignment: 'left'},
+        {name: "coinbase", title: "Coinbase"},
+        {name: "totalFeeTransfersToCreator", title: "Creator Fee"},
+        {name: "feeTransfersToSnarkers", title: "Snarks Fee"},
+        {name: "totalFeeTransfersByCoinbase", title: "Coinbase Fee"}
+    ]
+})
+
+_tableBlocks.addRows(blocksTable)
+_tableBlocks.printTable()
 
 print(`We are paying out ${allBlocksTotalRewards} nanomina in this window.`)
 print(`That is ${allBlocksTotalRewards / 10**9} mina`)
@@ -256,9 +277,10 @@ print(`Our fee is ${allBlocksTotalFees / 10**9} mina`)
 
 let payoutTable = []
 let payoutJson = []
-
+let index = 1
 for (let p of payouts) {
     payoutTable.push({
+        index,
         publicKey: p.publicKey,
         stack: p.stakingBalance,
         total: p.total,
@@ -267,13 +289,25 @@ for (let p of payouts) {
     })
 
     payoutJson.push({
+        index,
         publicKey: p.publicKey,
         total: p.total,
         totalMina: p.total / 10**9
     })
+
+    index++
 }
 
-console.table(payoutTable)
+const _tablePayout = new Table({
+    columns: [
+        {name: "index", title: "ID", alignment: 'center'},
+        {name: "publicKey", title: "Key", alignment: 'left'},
+        {name: "stack", title: "Stack"},
+        {name: "total", title: "Nano"},
+        {name: "totalMina", title: "Mina"},
+        {name: "foundation", title: "Foundation", alignment: 'center'}
+    ]
+})
 
-print(`This is required payouts`)
-console.table(payoutJson)
+_tablePayout.addRows(payoutTable)
+_tablePayout.printTable()
