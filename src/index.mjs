@@ -11,8 +11,9 @@ const publicKey = "B62qrAWZFqvgJbfU95t1owLAMKtsDTAGgSZzsBJYUzeQZ7dQNMmG5vw"
 const stakingEpoch = 5
 const minHeight = 0
 const confirmations = 15
-const coinbase = 720000000000
-const coinbaseSupercharge = 1440000000000
+const fee = 0.10 // 0.05 = 5%
+const coinbaseDefault = 720000000000
+const coinbaseSuperchargeDefault = 1440000000000
 const foundationDelegations = []
 let ledgerHash, latestBlock, latestBlockHeightValue, maxHeight
 
@@ -114,4 +115,165 @@ if (!blocks.data.blocks || blocks.data.blocks.length === 0) {
 
 for (let block of blocks.data.blocks) {
 
+    // ???
+    if (!block.transactions.coinbaseReceiverAccount) {
+        print(`${block.blockHeight} didn't have a coinbase so won it but no rewards.`)
+        break
+    }
+
+    let foundationPayouts = 0
+    let otherPayouts = 0
+    let sumEffectivePoolStakes = 0
+    let effectivePoolStakes = {}
+    let coinbaseReceiver = block.transactions.coinbaseReceiverAccount.publicKey
+    let coinbase = +block.transactions.coinbase
+
+    // FEE TRANSFERS
+
+    let feeTransfers = block.transactions.feeTransfer.filter( f => f.type === 'Fee_transfer' )
+    let totalFeeTransfers = feeTransfers.reduce((acc, val) => acc + +val.fee, 0)
+
+    let feeTransfersByCoinbase = block.transactions.feeTransfer.filter( f => f.type === 'Fee_transfer_via_coinbase' )
+    let totalFeeTransfersByCoinbase = feeTransfersByCoinbase.reduce((acc, val) => acc + +val.fee, 0)
+
+    // Sum all the fee transfers to this account with type of fee_transfer - these are the tx fees
+    let feeTransfersToCreator = feeTransfers.filter( f => f.recipient === coinbaseReceiver )
+    let totalFeeTransfersToCreator = feeTransfersToCreator.reduce((acc, val) => acc + +val.fee, 0)
+
+    // Sum all the fee transfers not to this account with type of fee_transfer - this is snark work for the included tx
+    let feeTransfersToSnarkers = totalFeeTransfers - totalFeeTransfersToCreator
+
+    // Determine the supercharged weighting for the block
+
+    // New way uses fee transfers so we share the resulting profitability of the tx and take into account the coinbase snark
+    let superchargedWeighting = 1 + (1 / (1 + totalFeeTransfersToCreator / (coinbase - totalFeeTransfersByCoinbase)))
+
+    // What are the rewards for the block - this is how we used to calculate it
+    // this serves as a sense check currently to check logic
+    let totalRewardsPrevMethod = coinbase + +block.txFees - +block.snarkFees
+
+    // Can also define this via fee transfers
+    let totalRewards = coinbase + totalFeeTransfersToCreator - totalFeeTransfersByCoinbase
+
+    assert(totalRewards === totalRewardsPrevMethod, `Total rewards for two methods must be equals! Prev: ${totalRewardsPrevMethod}, Total: ${totalRewards}`)
+
+    blocksTable.push([
+        block.blockHeight, superchargedWeighting, coinbase,
+        totalFeeTransfersToCreator, feeTransfersToSnarkers, totalFeeTransfersByCoinbase
+    ])
+
+    let totalFees = fee * totalRewards
+
+    allBlocksTotalRewards += totalRewards
+    allBlocksTotalFees += totalFees
+
+    let superchargedContribution
+
+    for(let p of payouts) {
+        if (p.foundationDelegation) {
+            // Only pay foundation a % of the normal coinbase. Round down to the nearest nanomina
+            let foundationBlockTotal = Math.floor((p.stakingBalance / totalStakingBalance) * coinbaseDefault * (1 - fee))
+            p.total += foundationBlockTotal
+            storePayout.push({
+                publicKey: p.publicKey,
+                blockHeight: block.blockHeight,
+                stateHash: block.stateHash,
+                totalPoolStakes: totalStakingBalance,
+                stakingBalance: p.stakingBalance,
+                dateTime: block.dateTime,
+                coinbase: coinbase,
+                totalRewards: totalRewards,
+                payout: foundationBlockTotal,
+                epoch: stakingEpoch,
+                ledgerHash: ledgerHash,
+                foundation: true
+            })
+
+            // Track all the Foundation payouts
+            foundationPayouts += foundationBlockTotal
+        } else {
+            // This was a non foundation address, so calculate this the other way
+            superchargedContribution = (superchargedWeighting - 1) * p.timedWeighting + 1
+            let effectiveStake = p.stakingBalance * superchargedContribution
+
+            // This the effective percentage of the pool disregarding the Foundation element
+            effectivePoolStakes[p.publicKey] = effectiveStake
+            sumEffectivePoolStakes += effectiveStake
+        }
+    }
+
+    // Check here the balances make sense
+    assert (foundationPayouts <= totalRewards, `Foundation payouts must be less or equal to total rewards!`)
+    assert (sumEffectivePoolStakes <= 2 * totalStakingBalance)
+
+    // What are the remaining rewards we can share? This should always be higher than if we don't share.
+    let blockPoolShare = totalRewards - (foundationPayouts / (1 - fee))
+
+    for(let p of payouts) {
+        if (p.foundationDelegation === true) continue
+
+        let effectivePoolWeighting = effectivePoolStakes[p.publicKey] / sumEffectivePoolStakes
+
+        assert(effectivePoolWeighting <= 1, `effectivePoolWeighting must be less than 1 or we have a major issue`)
+
+        let blockTotal = Math.floor(blockPoolShare * effectivePoolWeighting * (1 - fee))
+
+        p.total += blockTotal
+        otherPayouts += blockTotal
+
+        storePayout.push({
+            publicKey: p.publicKey,
+            blockHeight: block.blockHeight,
+            stateHash: block.stateHash,
+            totalPoolStakes: totalStakingBalance,
+            effectivePoolWeighting: effectivePoolWeighting,
+            effectivePoolStakes: effectivePoolStakes[p.publicKey],
+            superchargedContribution: superchargedContribution,
+            stakingBalance: p.stakingBalance,
+            sumEffectivePoolStakes: sumEffectivePoolStakes,
+            superChargedWeighting: superchargedWeighting,
+            dateTime: block.dateTime,
+            coinbase: coinbase,
+            totalRewards: totalRewards,
+            payout: blockTotal,
+            epoch: stakingEpoch,
+            ledgerHash: ledgerHash
+        })
+    }
+
+    // Final check
+    // These are essentially the same but we allow for a tiny bit of nanomina rounding and worst case we never pay more
+    assert (foundationPayouts + otherPayouts + totalFees <= totalRewards)
 }
+
+print(`We won these ${blocksTable.length} blocks:`)
+
+console.table(blocksTable)
+
+print(`We are paying out ${allBlocksTotalRewards} nanomina in this window.`)
+print(`That is ${allBlocksTotalRewards / 10**9} mina`)
+print(`Our fee is ${allBlocksTotalFees / 10**9} mina`)
+
+let payoutTable = []
+let payoutJson = []
+
+for (let p of payouts) {
+    payoutTable.push({
+        publicKey: p.publicKey,
+        stack: p.stakingBalance,
+        total: p.total,
+        totalMina: p.total / 10**9,
+        foundation: p.foundationDelegation
+    })
+
+    payoutJson.push({
+        publicKey: p.publicKey,
+        total: p.total,
+        totalMina: p.total / 10**9
+    })
+}
+
+console.table(payoutTable)
+
+print(`This is required payouts`)
+console.table(payoutJson)
