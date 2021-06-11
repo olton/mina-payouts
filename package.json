@@ -1,0 +1,29 @@
+{
+  "name": "mina-payouts",
+  "version": "1.0.0",
+  "description": "Calculating validator payouts to delegators",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/olton/mina-payouts.git"
+  },
+  "keywords": [
+    "mina",
+    "validator",
+    "payouts",
+    "delegations"
+  ],
+  "author": "Serhii Pimenov <serhii@pimenov.com.ua>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/olton/mina-payouts/issues"
+  },
+  "homepage": "https://github.com/olton/mina-payouts#readme",
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  }
+}
