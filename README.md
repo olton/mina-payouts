@@ -9,7 +9,7 @@ node index.mjs -key B62qr... -epoch 1 -fee 0.05
 
 ### Output
 ```shell
-\> node src\index.mjs -f 0.1 -e 5 -k B62qq6ZYPG5JsjZnGJ3pADmRn6hU6qy13EhraTSymjSgyEDwoDR9Gd6
+node src\index.mjs -f 0.1 -e 5 -k B62qq6ZYPG5JsjZnGJ3pADmRn6hU6qy13EhraTSymjSgyEDwoDR9Gd6
 
 We calculate payout for key: B62qq6ZYPG5JsjZnGJ3pADmRn6hU6qy13EhraTSymjSgyEDwoDR9Gd6
 In epoch 5 with fee 10.00%
