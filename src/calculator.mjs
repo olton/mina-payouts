@@ -2,7 +2,17 @@ import {getBlocks, getLagerHash, getLatestHeight, getStakingLager} from "./graph
 import {print, exit} from "./utils.mjs";
 import assert from "assert";
 
-export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations = 15, minHeight = 0, coinbaseDefault = 720000000000}, foundationDelegations = []) => {
+export const calculate = async (
+    publicKey,
+    {
+        epoch = 0,
+        fee = 0.05,
+        confirmations = 15,
+        minHeight = 0,
+        coinbaseDefault = 720000000000
+    },
+    foundationDelegations = []) => {
+
     let ledgerHash, latestBlock, latestBlockHeightValue, maxHeight
 
     try {
@@ -42,6 +52,8 @@ export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations
     let payouts = []
     let allBlocksTotalRewards = 0
     let allBlocksTotalFees = 0
+    let allBlocksFoundationPayouts = 0
+    let allBlocksPayouts = 0
     let blocksTable = []
     let stakingLedger
 
@@ -101,7 +113,7 @@ export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations
         // ???
         if (!block.transactions.coinbaseReceiverAccount) {
             print(`${block.blockHeight} didn't have a coinbase so won it but no rewards.`)
-            break
+            continue
         }
 
         let foundationPayouts = 0
@@ -109,7 +121,7 @@ export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations
         let sumEffectivePoolStakes = 0
         let effectivePoolStakes = {}
         let coinbaseReceiver = block.transactions.coinbaseReceiverAccount.publicKey
-        let coinbase = +block.transactions.coinbase
+        let coinbase = +block.transactions.coinbase ?? coinbaseDefault
 
         // FEE TRANSFERS
 
@@ -198,6 +210,9 @@ export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations
             otherPayouts += blockTotal
         }
 
+        allBlocksFoundationPayouts += foundationPayouts
+        allBlocksPayouts += otherPayouts
+
         // Final check
         // These are essentially the same but we allow for a tiny bit of nanomina rounding and worst case we never pay more
         assert (foundationPayouts + otherPayouts + totalFees <= totalRewards)
@@ -209,6 +224,8 @@ export const calculate = async (publicKey, {epoch = 0, fee = 0.05, confirmations
         totalFees: allBlocksTotalFees,
         totalStakingBalance,
         totalStakingFoundation: totalStakingBalanceFoundation,
+        foundationPayouts: allBlocksFoundationPayouts,
+        regularPayouts: allBlocksPayouts,
         payouts
     }
 }

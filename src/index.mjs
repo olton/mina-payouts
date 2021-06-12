@@ -5,14 +5,14 @@ import {getArguments} from "./arguments.mjs"
 
 /*
 * Using command line argument
-* node index.mjs -key B62qr... -epoch 0 -fee 0.05
+* node index.mjs -key B62qr... -epoch 1 -fee 0.05
 *
 * Match keys to arguments:
-* -key === publicKey
-* -epoch === epoch
-* -conf === confirmations
-* -min === minHeight
-* -base === coinbaseDefault
+* -k === publicKey
+* -e === epoch
+* -c === confirmations
+* -m === minHeight
+* -b === coinbaseDefault
 *
 * Default values:
 * epoch = 0,
@@ -22,28 +22,38 @@ import {getArguments} from "./arguments.mjs"
 * coinbaseDefault = 720000000000
 *
 * Important!
-* coinbaseDefault is used for calculating payout to foundation addresses
+* coinbaseDefault is used for calculating payout to foundation addresses, for regular payouts we use coinbase from block
 * */
 
 const args = getArguments()
 
-if (!args.key) {
-    exit(`Public key required!`)
-}
+/*
+* Set foundation delegation addresses, if exists
+* */
+const foundation = []
+const {
+    k: key = "B62qrAWZFqvgJbfU95t1owLAMKtsDTAGgSZzsBJYUzeQZ7dQNMmG5vw",
+    f: fee = 0.05,
+    e: epoch = 0,
+    c: confirmations = 15,
+    m: minHeight = 0,
+    b: coinbase = 720000000000
+} = args
 
-print(`We calculate payout for key: ${args.key}`)
-print(`In epoch ${args.epoch ?? 0} with fee ${(args.fee ?? 0.05) * 100}%`)
+print(`We calculate payout for key: ${key}`)
+print(`In epoch ${epoch} with fee ${(fee * 100).toFixed(2)}%`)
 
 
 let calculations = await calculate(
-    args.key,
+    key,
     {
-        fee: args.fee,
-        epoch: args.epoch,
-        confirmations: args.conf,
-        minHeight: args.min,
-        coinbaseDefault: args.base
-    }
+        fee,
+        epoch,
+        confirmations,
+        minHeight,
+        coinbaseDefault: coinbase
+    },
+    foundation
 )
 
 print(`The pool total staking balance is: ${calculations.totalStakingBalance}`)
@@ -67,13 +77,12 @@ _tableBlocks.addRows(calculations.blocks)
 _tableBlocks.printTable()
 
 print(`\nWe are paying out ${calculations.totalRewards} nanomina in this window.`)
-print(`That is ${calculations.totalRewards / 10**9} mina`)
-print(`Our fee is ${calculations.totalFees / 10**9} mina`)
+print(`Total rewards is ${calculations.totalRewards / 10**9} mina`)
+print(`Pool fee is ${calculations.totalFees / 10**9} mina`)
 
 print(`\nPayout table:`)
 
 let payoutTable = []
-let payoutJson = []
 let index = 1
 for (let p of calculations.payouts) {
     payoutTable.push({
@@ -83,13 +92,6 @@ for (let p of calculations.payouts) {
         totalMina: p.total / 10**9,
         total: p.total,
         foundation: p.foundationDelegation
-    })
-
-    payoutJson.push({
-        index,
-        publicKey: p.publicKey,
-        totalMina: p.total / 10**9,
-        total: p.total,
     })
 
     index++
