@@ -31,6 +31,10 @@ const args = getArguments()
 * Set foundation delegation addresses, if exists
 * */
 const foundation = []
+
+/*
+* Set calculation parameters
+* */
 const {
     k: key = "B62qrAWZFqvgJbfU95t1owLAMKtsDTAGgSZzsBJYUzeQZ7dQNMmG5vw",
     f: fee = 0.05,
@@ -43,7 +47,9 @@ const {
 print(`We calculate payout for key: ${key}`)
 print(`In epoch ${epoch} with fee ${(fee * 100).toFixed(2)}%`)
 
-
+/*
+* Calculate payouts
+* */
 let calculations = await calculate(
     key,
     {
