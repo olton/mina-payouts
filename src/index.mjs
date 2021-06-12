@@ -3,6 +3,28 @@ import {Table} from "console-table-printer"
 import {calculate} from "./calculator.mjs"
 import {getArguments} from "./arguments.mjs"
 
+/*
+* Using command line argument
+* node index.mjs -key B62qr... -epoch 0 -fee 0.05
+*
+* Match keys to arguments:
+* -key === publicKey
+* -epoch === epoch
+* -conf === confirmations
+* -min === minHeight
+* -base === coinbaseDefault
+*
+* Default values:
+* epoch = 0,
+* fee = 0.05,
+* confirmations = 15,
+* minHeight = 0,
+* coinbaseDefault = 720000000000
+*
+* Important!
+* coinbaseDefault is used for calculating payout to foundation addresses
+* */
+
 const args = getArguments()
 
 if (!args.key) {
@@ -11,6 +33,7 @@ if (!args.key) {
 
 print(`We calculate payout for key: ${args.key}`)
 print(`In epoch ${args.epoch ?? 0} with fee ${(args.fee ?? 0.05) * 100}%`)
+
 
 let calculations = await calculate(
     args.key,
